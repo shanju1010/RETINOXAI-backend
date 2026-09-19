@@ -1,2 +1,22 @@
+[project]
+name = "retinoxai-backend"
+version = "0.1.0"
+description = "RETINOXAI FastAPI backend for diabetic retinopathy screening"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "Pillow",
+    "numpy",
+    "opencv-python-headless",
+    "pandas",
+    "scikit-learn",
+    "timm",
+    "grad-cam",
+    "torch==2.11.0",
+    "torchvision==0.26.0"
+]
+
 [tool.vercel]
 entrypoint = "backend.app.main:app"
