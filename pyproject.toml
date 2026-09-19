@@ -3,6 +3,7 @@ name = "retinoxai-backend"
 version = "0.1.0"
 description = "RETINOXAI FastAPI backend for diabetic retinopathy screening"
 requires-python = "~=3.12.0"
+
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -10,13 +11,24 @@ dependencies = [
     "Pillow",
     "numpy",
     "opencv-python-headless",
-    "pandas",
-    "scikit-learn",
     "timm",
     "grad-cam",
     "torch==2.11.0",
     "torchvision==0.26.0"
 ]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" }
+]
+torchvision = [
+    { index = "pytorch-cpu" }
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.vercel]
 entrypoint = "backend.app.main:app"
