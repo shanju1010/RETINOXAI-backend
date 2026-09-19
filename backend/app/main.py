@@ -36,7 +36,15 @@ CHECKPOINT = Path(
     )
 )
 
-OUTPUT_DIR = APP_ROOT / "outputs"
+# Vercel Functions have a read-only deployed filesystem.
+# Use /tmp for runtime-generated files. An environment variable allows
+# the directory to be customized without changing the application code.
+OUTPUT_DIR = Path(
+    os.getenv(
+        "RETINOXAI_OUTPUT_DIR",
+        "/tmp/retinoxai_outputs",
+    )
+)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 SCREENING_RESULT_FILE = OUTPUT_DIR / "screening_result.json"
