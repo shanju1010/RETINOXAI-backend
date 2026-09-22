@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -48,6 +49,83 @@ OUTPUT_DIR = Path(
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 SCREENING_RESULT_FILE = OUTPUT_DIR / "screening_result.json"
+
+
+# ------------------------------------------------------------
+# Compact image output for Vercel
+# ------------------------------------------------------------
+# Vercel Function responses have a 4.5 MB payload limit.
+# Return compact JPEG previews directly in the /predict response
+# so later requests do not depend on server-instance memory.
+
+OUTPUT_IMAGE_MAX_SIDE = 640
+OUTPUT_IMAGE_JPEG_QUALITY = 70
+
+
+def _encode_bgr_output_data_url(image):
+    """Resize and encode an OpenCV BGR image as a compact data URL."""
+    height, width = image.shape[:2]
+    longest_side = max(height, width)
+
+    if longest_side > OUTPUT_IMAGE_MAX_SIDE:
+        scale = OUTPUT_IMAGE_MAX_SIDE / float(longest_side)
+        new_width = max(1, int(round(width * scale)))
+        new_height = max(1, int(round(height * scale)))
+
+        image = cv2.resize(
+            image,
+            (new_width, new_height),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    success, encoded = cv2.imencode(
+        ".jpg",
+        image,
+        [
+            cv2.IMWRITE_JPEG_QUALITY,
+            OUTPUT_IMAGE_JPEG_QUALITY,
+        ],
+    )
+
+    if not success:
+        raise RuntimeError(
+            "Could not encode output image for API response."
+        )
+
+    payload = base64.b64encode(
+        encoded.tobytes()
+    ).decode("ascii")
+
+    return f"data:image/jpeg;base64,{payload}"
+
+
+def _encode_pil_output_data_url(image):
+    """Resize and encode a PIL image as a compact JPEG data URL."""
+    image = image.convert("RGB").copy()
+
+    image.thumbnail(
+        (
+            OUTPUT_IMAGE_MAX_SIDE,
+            OUTPUT_IMAGE_MAX_SIDE,
+        ),
+        Image.Resampling.LANCZOS,
+    )
+
+    buffer = io.BytesIO()
+
+    image.save(
+        buffer,
+        format="JPEG",
+        quality=OUTPUT_IMAGE_JPEG_QUALITY,
+        optimize=True,
+    )
+
+    payload = base64.b64encode(
+        buffer.getvalue()
+    ).decode("ascii")
+
+    return f"data:image/jpeg;base64,{payload}"
+
 
 DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -362,6 +440,10 @@ async def predict(
             structure_encoded.tobytes()
         )
 
+        structure_data_url = _encode_bgr_output_data_url(
+            annotated_structure
+        )
+
         # Convert structure result to JSON-safe values
         structure_api = make_api_result(
             structure_result
@@ -391,6 +473,10 @@ async def predict(
 
         _latest_enhanced = (
             enhanced_encoded.tobytes()
+        )
+
+        enhanced_data_url = _encode_bgr_output_data_url(
+            enhanced_bgr
         )
 
         # BGR -> RGB for PIL
@@ -453,6 +539,10 @@ async def predict(
             cam_buffer.getvalue()
         )
 
+        cam_data_url = _encode_pil_output_data_url(
+            cam_img
+        )
+
         # ----------------------------------------------------
         # 8. Build real screening result
         # ----------------------------------------------------
@@ -483,11 +573,9 @@ async def predict(
             "model": "EfficientNet-B0",
 
             "outputs": {
-                "gradcam": "/explanation/latest",
-                "enhanced_image": "/enhanced/latest",
-                "retinal_structure": (
-                    "/retinal-structure/latest"
-                ),
+                "gradcam": cam_data_url,
+                "enhanced_image": enhanced_data_url,
+                "retinal_structure": structure_data_url,
             },
 
             "workflow": {
